@@ -1,0 +1,219 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>RYUVAR｜災害時参集ナビ</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#071a2a;color:#f3f8ff}header{padding:12px 15px;background:#102c46;display:flex;align-items:center;justify-content:space-between}header strong{font-size:23px;letter-spacing:.03em}header small{font-size:11px;color:#a6d4e8}#map{height:49dvh;min-height:300px;background:#b5c4c8}.panel{padding:12px 15px}.status{background:#193953;border-radius:12px;padding:12px;line-height:1.6;margin-bottom:10px}.inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px}label{font-size:12px;color:#c7dfed}input,select{width:100%;padding:11px 8px;background:#fff;color:#142332;border:0;border-radius:8px;font-size:15px}button{background:#19a5dc;border:0;border-radius:9px;color:#fff;padding:12px;font-size:15px;font-weight:700;cursor:pointer}button.secondary{background:#355b74}button.danger{background:#c45540}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.legend{font-size:12px;line-height:1.7;color:#cce1ee}details{background:#102c46;border-radius:9px;margin-top:10px;padding:10px}summary{cursor:pointer;font-weight:700}.note{font-size:11px;color:#c0d4e1;padding:7px 0 15px}#log{font-size:12px;white-space:pre-wrap;color:#b7d7e8}.leaflet-container{font-family:system-ui,sans-serif}.leaflet-popup-content{font-size:13px}h3{font-size:15px;margin:12px 0 8px}</style><link rel="manifest" href="./manifest.webmanifest"><meta name="theme-color" content="#102c46"><style>.quick{padding:12px 15px;background:#10304a;display:grid;gap:8px}.quick a{display:block;background:#20688c;color:white;border-radius:9px;text-decoration:none;padding:12px;text-align:center;font-weight:700}.webnote{padding:12px 15px;background:#3d311b;color:#fff1ca;font-size:13px;line-height:1.6}</style></head><body><header><div><strong>RYUVAR</strong><div><small>災害時参集ナビ｜Webアプリ Ver.1.9｜GPSは任意</small></div></div><span>🚒</span></header><div class="webnote" id="webAppNotice" role="status">訓練・開発専用。登録危険箇所は過去情報であり、現時点の通行止めを示しません。道路の通行可能性は保証できません。</div><nav class="quick"><a href="#realRoadSection">🛣 実道路グラフで経路を試算</a><a href="#map">🗺 地図・出発地点を確認</a></nav><div id="map"></div><div id="hostingStatus" role="status" style="padding:9px 15px;background:#23435d;font-size:12px"></div><section class="panel"><div class="status" id="status">⚪ 出発地点を座標で指定してください。<br>目的地：笠原消防署</div><div class="inputs"><label>出発地点・緯度<input id="lat" type="number" step="any" value="35.311557"></label><label>出発地点・経度<input id="lon" type="number" step="any" value="137.146892"></label></div><div class="buttons"><button id="routeBtn">安全優先ルート検索</button><button class="secondary" id="placeBtn">地図をタップして出発地指定</button></div><div style="margin:8px 0"><button class="secondary" id="gpsBtn" type="button" style="width:100%">📍 GPSで現在地を取得（任意）</button><p id="gpsInfo" class="note" role="status">GPSは自動起動しません。位置情報は出発地設定にのみ使用します。取得精度を確認してください。</p></div><div class="legend">🔵 出発地　🚒 笠原消防署　🔴 過去の危険区間　🟠 注意区間　⛔ 当日通行止め　🟣 当日注意情報<br>青線：安全確認条件を満たした候補経路（災害時の通行保証ではありません）</div><details><summary>＋ 当日の現場ポイントを追加</summary><p class="note">地図をタップして報告地点を選択できます。試作版の報告はこの端末内だけに保持され、他職員とは共有されません。</p><div class="inputs"><label>種類<select id="kind"><option value="closed">⛔ 通行止め</option><option value="flood">🌊 冠水</option><option value="fallen">🌳 倒木・土砂</option><option value="caution">⚠ 注意</option><option value="passable">🟢 通行情報（未検証）</option></select></label><label>報告地点<select id="pointMode"><option value="tap">地図をタップ</option><option value="start">現在の出発地点</option></select></label></div><label>内容<input id="memo" placeholder="例：橋の手前で冠水を確認"></label><div class="buttons"><button id="addBtn">ポイントを登録</button><button class="secondary" id="clearBtn">当日情報を全削除</button></div><div id="reports"></div></details><details><summary>🧪 道路区間除外エンジン・独立検証（架空道路）</summary><p class="note">この検証は架空の道路網で道路1本を除外し、残った道路だけで最短経路を計算します。実際の多治見市の道路データや通行可否は判定しません。</p><button id="graphTestBtn" type="button">道路除外アルゴリズムを検証</button><pre id="graphTestResult" style="white-space:pre-wrap;font-size:12px;line-height:1.6"></pre></details><details><summary>🛣 実道路データと危険区間⑦を照合（調査用）</summary><p class="note">OpenStreetMapの道路形状を通信取得し、危険区間⑦から30m以内に接近する道路の候補を表示します。候補＝通行止め道路ではありません。取得した道路は紫色で表示します。道路の正式な規制・安全性・車両通行可否は未確認です。</p><button type="button" id="osmInspectBtn">危険区間⑦付近の道路を読み込む</button><p class="note">押すと直ちに下の状態表示が変わります。取得には通信が必要です。</p><p id="osmInspectStatus" class="note">未取得（外部通信が必要）</p><div id="osmInspectList" style="font-size:12px;white-space:pre-wrap;line-height:1.6"></div></details><details open><summary>🧪 オフライン危険道路判定（GPS不要・通信不要）</summary><p class="note">危険区間①〜⑦と道路線形を照合する判定処理を、端末内で検証します。これは道路データの取得や現況確認ではありません。</p><button type="button" id="offlineTestBtn">オフライン判定テストを実行</button><pre id="offlineTestResult" style="white-space:pre-wrap;font-size:12px;line-height:1.7" role="status">ボタンを押すと結果がここに表示されます。</pre><p class="note">道路データのJSONファイル（Overpass APIの「out geom」形式）をお持ちの場合は、通信せずに読み込んで①〜⑦の近接道路候補を比較できます。</p><input type="file" id="roadJsonInput" accept=".json,application/json" aria-label="道路データJSONを選択"><button type="button" id="roadJsonBtn" class="secondary" style="width:100%;margin-top:8px">JSONファイルから道路候補を判定</button><pre id="roadJsonResult" style="white-space:pre-wrap;font-size:12px;line-height:1.7" role="status">未読み込み</pre></details><details open id="realRoadSection"><summary>🛣️ 実道路グラフ経路探索（GPS不要・JSON読込）</summary><p class="note">道路データを読み込み、危険区間に30m未満まで近づく道路をグラフから除外して、残った道路だけで経路を計算します。一方通行・自動車進入規制を保守的に判定します。これは道路形状による試験計算であり、実際の通行止めを示しません。OSM道路データの網羅性・通行規制・通行可否は保証されません。</p><p class="note">①「道路データを通信取得」を押すか、②Overpassの out geom JSON を選択してください。通信取得に失敗した場合もJSON読込で続行できます。</p><button id="fetchGraphBtn" type="button">📡 周辺道路データを通信取得（任意）</button><input id="graphJsonFile" type="file" accept=".json,application/json" style="margin-top:10px"><button id="loadGraphBtn" type="button" class="secondary" style="margin-top:8px">📁 道路JSONを読み込む</button><button id="calculateGraphBtn" type="button" style="margin-top:8px">🚙 危険道路を除外して経路計算</button><pre id="realGraphResult" role="status" style="white-space:pre-wrap;font-size:12px;line-height:1.7">道路データ未読込。GPSは必要ありません。</pre></details><details><summary>①〜⑦ 過去の危険区間・詳細</summary><div id="hazards"></div></details><details><summary>診断ログ（4候補比較・共通危険箇所・赤点線）</summary><div id="log">未検索</div></details><p class="note">【試作・訓練専用 Ver.1.9（操作応答改善） 迂回候補精査版】過去の危険情報は現在の通行止めを示すものではありません。赤点線は棄却経路であり走行案内ではありません。道路区間そのものの確実な除外・道路幅・車両通行規制・現況・災害データの網羅的な検証は未実装です。追加回避点と経由地による再探索は道路除外を保証しません。共通最接近位置の診断は道路エッジの特定ではありません。固定経由地を廃止し、危険区間付近から動的な迂回点を生成します。迂回点が車両通行可能な道路にある保証はありません。通信・外部経路サーバーが必要です。現場での運用判断には使用しないでください。地図 © OpenStreetMap contributors。</p></section><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+'use strict';const station=[35.299360,137.160154], names=['① 生田町 ドエルイクタ前','② 音羽町 木曽路東側','③ 前畑町 市民病院アンダーパス','④ 前畑町 県病院アンダーパス','⑤ 山吹町 木股養鶏場前','⑥ 滝呂町8丁目 萬両東側','⑦ 上滝呂橋南側～笠原下水処理場付近'];const data=[[[35.337361,137.143083],[35.336944,137.143722],'closed'],[[35.339000,137.115611],[35.338694,137.115667],'closed'],[[35.333167,137.116167],[35.333250,137.116472],'closed'],[[35.330500,137.111056],[35.329944,137.111694],'closed'],[[35.349639,137.136278],[35.349806,137.136667],'caution'],[[35.319000,137.147056],[35.318556,137.147194],'caution'],[[35.307583,137.148972],[35.308944,137.148194],'closed']];const hazards=data.map((d,i)=>({id:String(i+1),name:names[i],a:d[0],b:d[1],kind:d[2]}));const $=id=>document.getElementById(id);const map=L.map('map').setView([35.318,137.145],12);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);const stationMarker=L.marker(station).addTo(map).bindPopup('🚒 笠原消防署（施設代表座標・入口未検証）');let startMarker=null,routeLine=null,rejectedLine=null,closestLayer=null,chosen=null,reportLayers=[],reports=[];const key='ryuvar_local_reports_v1';try{reports=JSON.parse(localStorage.getItem(key)||'[]');if(!Array.isArray(reports))reports=[];reports=reports.filter(r=>r&&Array.isArray(r.p)&&r.p.length===2&&r.p.every(Number.isFinite)&&typeof r.kind==='string').slice(0,500)}catch{reports=[]}function status(s){$('status').textContent=s}function log(s){$('log').textContent=s}function start(){if($('lat').value.trim()===''||$('lon').value.trim()==='')throw Error('出発地点の座標を入力してください');const a=Number($('lat').value),b=Number($('lon').value);if($('lat').value.trim()===''||$('lon').value.trim()===''||!Number.isFinite(a)||!Number.isFinite(b)||a<-90||a>90||b<-180||b>180)throw Error('出発地点の座標が不正です');return [a,b]}function setStart(){let p=start();if(routeLine){map.removeLayer(routeLine);routeLine=null}clearDiagnostics();if(startMarker)map.removeLayer(startMarker);startMarker=L.circleMarker(p,{radius:9,color:'#fff',weight:3,fillColor:'#1174ff',fillOpacity:1}).addTo(map).bindPopup('🔵 指定した出発地点');return p}function draw(){hazards.forEach(h=>L.polyline([h.a,h.b],{color:h.kind==='closed'?'#dc243d':'#f39c12',weight:7,opacity:.85}).addTo(map).bindPopup(h.name+'（過去の危険情報）'));$('hazards').innerHTML=hazards.map(h=>'<p>'+h.name+'｜'+(h.kind==='closed'?'過去の水没・洪水等':'過去の注意箇所')+'</p>').join('');drawReports()}function drawReports(){reportLayers.forEach(l=>map.removeLayer(l));reportLayers=[];reports.forEach((r,i)=>{const c=r.kind==='caution'?'#8039c9':r.kind==='passable'?'#259a69':'#d62140';const m=L.circleMarker(r.p,{radius:9,color:'#fff',weight:2,fillColor:c,fillOpacity:1}).addTo(map).bindPopup(()=>{const el=document.createElement('div');el.textContent='当日情報 '+(i+1)+'：'+r.kind+' / '+r.memo+' / '+r.at+'（自己申告・未検証）';return el});reportLayers.push(m)});$('reports').textContent='登録件数：'+reports.length+'件'}function save(){try{localStorage.setItem(key,JSON.stringify(reports))}catch(e){log('端末内保存に失敗：'+e.message)}}function rad(n){return n*Math.PI/180}function xy(p,lat0){return [p[1]*111320*Math.cos(rad(lat0)),p[0]*111320]}function segdist(a,b,c,d){const lat0=(a[0]+b[0]+c[0]+d[0])/4,A=xy(a,lat0),B=xy(b,lat0),C=xy(c,lat0),D=xy(d,lat0);function cross(p,q,r){return(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0])}function pt(p,u,v){const dx=v[0]-u[0],dy=v[1]-u[1],den=dx*dx+dy*dy,t=den?Math.max(0,Math.min(1,((p[0]-u[0])*dx+(p[1]-u[1])*dy)/den)):0;return Math.hypot(p[0]-u[0]-t*dx,p[1]-u[1]-t*dy)}const z1=cross(A,B,C),z2=cross(A,B,D),z3=cross(C,D,A),z4=cross(C,D,B);const eps=1e-8;function on(p,q,r){return Math.min(p[0],q[0])-eps<=r[0]&&r[0]<=Math.max(p[0],q[0])+eps&&Math.min(p[1],q[1])-eps<=r[1]&&r[1]<=Math.max(p[1],q[1])+eps}if((z1*z2<0&&z3*z4<0)||(Math.abs(z1)<eps&&on(A,B,C))||(Math.abs(z2)<eps&&on(A,B,D))||(Math.abs(z3)<eps&&on(C,D,A))||(Math.abs(z4)<eps&&on(C,D,B)))return 0;return Math.min(pt(A,C,D),pt(B,C,D),pt(C,A,B),pt(D,A,B))}function activeHazards(){return [...hazards.filter(h=>h.kind!=='caution'),...reports.filter(r=>!['caution','passable'].includes(r.kind)).map((r,i)=>({id:'当日'+(i+1),name:r.memo||r.kind,a:r.p,b:r.p,kind:r.kind}))]}function avoidPoints(hs,divisions){let pts=[];for(const h of hs){for(let i=0;i<=divisions;i++){const t=i/divisions;pts.push({lat:h.a[0]+(h.b[0]-h.a[0])*t,lon:h.a[1]+(h.b[1]-h.a[1])*t})}}if(divisions>=8){for(const h of hs){const mid=[(h.a[0]+h.b[0])/2,(h.a[1]+h.b[1])/2];const dy=(h.b[0]-h.a[0])*111320,dx=(h.b[1]-h.a[1])*111320*Math.cos(rad(mid[0]));const length=Math.hypot(dx,dy);if(length>1){for(const meters of [40,80])for(const sign of [-1,1])pts.push({lat:mid[0]+sign*(-dx/length)*meters/111320,lon:mid[1]+sign*(dy/length)*meters/(111320*Math.cos(rad(mid[0])))});}}}return pts}function decode(s){let out=[],i=0,lat=0,lon=0;while(i<s.length){for(let k=0;k<2;k++){let b,shift=0,res=0;do{if(i>=s.length)throw Error('経路形状が不正');b=s.charCodeAt(i++)-63;res|=(b&31)<<shift;shift+=5}while(b>=32);const delta=(res&1)?~(res>>1):res>>1;if(k===0)lat+=delta;else lon+=delta}out.push([lat/1e6,lon/1e6])}return out}async function getRoute(p,divisions,via=null){const locations=[{lat:p[0],lon:p[1]}];if(via)locations.push({lat:via[0],lon:via[1],type:'break'});locations.push({lat:station[0],lon:station[1]});const body={locations,costing:'auto',costing_options:{auto:{avoid_locations:avoidPoints(activeHazards(),divisions)}},directions_options:{units:'kilometers'}};const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),18000);try{const res=await fetch('https://valhalla1.openstreetmap.de/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal});if(!res.ok)throw Error('経路サーバー応答 '+res.status);const json=await res.json();if(!json.trip?.legs?.[0]?.shape)throw Error('経路データがありません');return {points:json.trip.legs.flatMap((leg,i)=>{const arr=decode(leg.shape);return i?arr.slice(1):arr}),km:json.trip.summary?.length}}finally{clearTimeout(timer)}}function closestPointOnSegment(p,a,b){const lat0=(p[0]+a[0]+b[0])/3, kx=111320*Math.cos(rad(lat0)),ky=111320,dx=(b[1]-a[1])*kx,dy=(b[0]-a[0])*ky,den=dx*dx+dy*dy,t=den?Math.max(0,Math.min(1,(((p[1]-a[1])*kx)*dx+((p[0]-a[0])*ky)*dy)/den)):0;return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}function closestPair(a,b,c,d){const candidates=[];for(const p of [a,b])candidates.push([p,closestPointOnSegment(p,c,d)]);for(const p of [c,d]){const q=closestPointOnSegment(p,a,b);candidates.push([q,p])}let best=candidates[0],dist=Infinity;for(const pair of candidates){const v=segdist(pair[0],pair[0],pair[1],pair[1]);if(v<dist){dist=v;best=pair}}return {route:best[0],hazard:best[1],meters:dist}}function diagnostic(pts){let best=null;for(const h of activeHazards()){for(let i=1;i<pts.length;i++){const pair=closestPair(pts[i-1],pts[i],h.a,h.b);const distance=segdist(pts[i-1],pts[i],h.a,h.b);if(!best||distance<best.meters)best={...pair,meters:distance,hazardId:h.id,hazardName:h.name}}}return best}function clearDiagnostics(){if(rejectedLine){map.removeLayer(rejectedLine);rejectedLine=null}if(closestLayer){map.removeLayer(closestLayer);closestLayer=null}}function violations(pts){let found=[];for(const h of activeHazards()){let min=Infinity;for(let i=1;i<pts.length;i++)min=Math.min(min,segdist(pts[i-1],pts[i],h.a,h.b));if(min<30)found.push(h.id+'（約'+Math.round(min)+'m）')}return found}let revision=0;let busy=false;$('routeBtn').onclick=async()=>{if(busy)return;busy=true;$('routeBtn').disabled=true;if(routeLine){map.removeLayer(routeLine);routeLine=null}clearDiagnostics();try{const p=setStart();const searchRevision=revision,startInputLat=$('lat').value,startInputLon=$('lon').value;status('🔄 過去の危険区間・当日情報を回避して経路検索中…');let notes=[],accepted=null,lastRejected=null,lastDiagnostic=null,allResults=[];const plans=[{div:4,via:null,label:'通常経路'}];
+// 危険区間の両端から側方へ候補点を生成。固定の東西経由地を廃止。
+function detours(h){const mid=[(h.a[0]+h.b[0])/2,(h.a[1]+h.b[1])/2],lat0=rad(mid[0]);let dy=(h.b[0]-h.a[0])*111320,dx=(h.b[1]-h.a[1])*111320*Math.cos(lat0),len=Math.hypot(dx,dy);if(len<1){dx=1;dy=0;len=1}const pts=[];for(const distance of [60,90,120,160,220,300,450,700])for(const sign of [-1,1]){pts.push([mid[0]+sign*(-dx/len)*distance/111320,mid[1]+sign*(dy/len)*distance/(111320*Math.cos(lat0))])}return pts}
+let bestKm=Infinity;let targetHazard=null;let baseKm=null;let safeCandidates=0;
+for(let idx=0;idx<plans.length&&idx<19;idx++){
+const plan=plans[idx];try{const r=await getRoute(p,plan.div,plan.via);if(searchRevision!==revision||$('lat').value!==startInputLat||$('lon').value!==startInputLon)throw Error('検索中に出発地または危険情報が変更されました。再検索してください');const bad=violations(r.points),diag=diagnostic(r.points);if(idx===0&&Number.isFinite(Number(r.km)))baseKm=Number(r.km);allResults.push({label:plan.label,bad,diag});notes.push(plan.label+'：'+(bad.length?'危険接近 '+bad.join('、'):'登録危険区間への30m未満接近なし')+' / 約'+(r.km??'?')+'km');
+if(!bad.length){safeCandidates++;const km=Number(r.km);if(Number.isFinite(km)&&km<bestKm){accepted=r;bestKm=km}else if(!accepted){accepted=r}continue}
+lastRejected=r;lastDiagnostic=diag;if(diag){notes.push('最接近：'+diag.hazardId+' / '+diag.meters.toFixed(1)+'m / 経路側 '+diag.route.map(v=>v.toFixed(6)).join(',')+' / 危険側 '+diag.hazard.map(v=>v.toFixed(6)).join(','));if(!targetHazard){targetHazard=activeHazards().find(h=>h.id===diag.hazardId);if(targetHazard){detours(targetHazard).forEach((via,i)=>plans.push({div:4,via,label:'危険区間'+targetHazard.id+' 自動迂回'+(i+1)}));}}}
+}catch(e){notes.push(plan.label+' 検索失敗：'+e.message);if(searchRevision!==revision)break}}
+notes.push('探索方針：危険区間の左右60〜700mに動的迂回点を配置し、最大19候補を比較（道路エッジ除外ではありません）。');notes.push('距離比較：通常経路 '+(baseKm===null?'不明':baseKm.toFixed(3)+'km')+'／登録危険区間を回避した候補 '+safeCandidates+'件／最短候補 '+(accepted?Number(accepted.km).toFixed(3)+'km':'なし'));if(accepted&&baseKm>0)notes.push('通常経路との差：約'+(Number(accepted.km)-baseKm).toFixed(3)+'km（通常経路は危険接近のため比較用のみ）');notes.push('注意：迂回点は道路上にスナップされるとは限らず、道路エッジ除外・通行可能性の保証はありません。');
+if(allResults.length>1){const common=allResults.filter(x=>x.bad.length).map(x=>x.diag).filter(Boolean);if(common.length>1){const ids=[...new Set(common.map(x=>x.hazardId))];const positions=common.map(x=>x.route);let spread=0;for(let i=0;i<positions.length;i++)for(let j=i+1;j<positions.length;j++)spread=Math.max(spread,segdist(positions[i],positions[i],positions[j],positions[j]));notes.push('共通危険診断：'+common.length+'候補が危険接近。最接近危険番号 '+ids.join('、')+'／最接近位置の最大ばらつき約'+spread.toFixed(1)+'m');notes.push('注意：最接近位置が一致しても、同一道路エッジの通過は未確認です。');}}if(searchRevision!==revision||$('lat').value!==startInputLat||$('lon').value!==startInputLon){status('⚠ 危険情報が更新されました。再検索してください');log(notes.join('\n'));return}log(notes.join('\n'));if(accepted){routeLine=L.polyline(accepted.points,{color:'#0869ee',weight:6,opacity:.92}).addTo(map);map.fitBounds(routeLine.getBounds().pad(.18));status('🔵 試験用の迂回候補（約'+(accepted.km??'?')+'km、登録危険区間への30m未満接近なし）。実道路の通行可否・災害時の安全性は未確認です。走行案内には使用しないでください。')}else{status('⛔ 安全基準を満たす経路を確定できません。赤点線は棄却した経路であり、走行してはいけません。');if(lastRejected){rejectedLine=L.polyline(lastRejected.points,{color:'#d92f45',weight:5,opacity:.8,dashArray:'9,11'}).addTo(map);if(lastDiagnostic){const d=lastDiagnostic;const marker=L.circleMarker(d.route,{radius:9,color:'#fff',weight:3,fillColor:'#ff9c00',fillOpacity:1}).bindPopup('⚠ 危険区間'+d.hazardId+'まで約'+d.meters.toFixed(1)+'m（最接近推定点）');const line=L.polyline([d.route,d.hazard],{color:'#ff9c00',weight:3,dashArray:'4,5'});closestLayer=L.layerGroup([marker,line]).addTo(map);notes.push('診断：赤点線＝棄却ルート、橙丸＝最接近点。危険区間と経路の交差時は最接近点の表示が近似となる場合があります。');log(notes.join('\n'))}map.fitBounds(rejectedLine.getBounds().pad(.2))}else map.fitBounds(L.latLngBounds([p,station]).pad(.4))}}catch(e){status('⚠ 検索できません：'+e.message);log(e.stack||e.message)}finally{busy=false;$('routeBtn').disabled=false}};let gpsBusy=false;let gpsAccuracyLayer=null;
+$('gpsBtn').onclick=()=>{
+ if(gpsBusy)return;
+ if(!navigator.geolocation){$('gpsInfo').textContent='⚠ このブラウザでは位置情報を利用できません。座標入力または地図タップをご利用ください。';return}
+ if(!window.isSecureContext){$('gpsInfo').textContent='⚠ この開き方ではGPSを利用できません。HTTPSで公開されたページから開くか、座標入力をご利用ください。';return}
+ gpsBusy=true;$('gpsBtn').disabled=true;$('gpsInfo').textContent='現在地を取得中です…（最大15秒）';
+ navigator.geolocation.getCurrentPosition(pos=>{
+  gpsBusy=false;$('gpsBtn').disabled=false;
+  const {latitude,longitude,accuracy}=pos.coords;
+  if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||!Number.isFinite(accuracy)){$('gpsInfo').textContent='⚠ 位置情報の値が不正です。';return}
+  if(accuracy>100){$('gpsInfo').textContent='⚠ 位置精度が約'+Math.round(accuracy)+'mと低いため自動設定しません。屋外で再取得するか地図で指定してください。';return}
+  $('lat').value=latitude.toFixed(6);$('lon').value=longitude.toFixed(6);
+  try{setStart()}catch(e){$('gpsInfo').textContent='⚠ '+e.message;return}
+  if(gpsAccuracyLayer)map.removeLayer(gpsAccuracyLayer);
+  gpsAccuracyLayer=L.circle([latitude,longitude],{radius:accuracy,color:'#2085ed',weight:1,fillOpacity:.08}).addTo(map);
+  map.setView([latitude,longitude],Math.max(map.getZoom(),15));
+  const msg='📍 GPSで出発地点を設定しました（推定誤差約'+Math.round(accuracy)+'m）。道路上の位置か確認してから検索してください。';
+  $('gpsInfo').textContent=msg;status(msg+' 既存経路は無効になりました。');
+ },err=>{
+  gpsBusy=false;$('gpsBtn').disabled=false;
+  const msg=err.code===1?'位置情報が許可されていません。Chromeと端末の位置情報設定をご確認ください。':err.code===2?'現在地を取得できませんでした。':err.code===3?'現在地の取得が時間切れになりました。':'現在地の取得に失敗しました。';
+  $('gpsInfo').textContent='⚠ '+msg+' 手入力または地図タップでも設定できます。';
+ },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+};
+let pickStart=false;$('placeBtn').onclick=()=>{pickStart=true;status('📍 地図上の出発地点をタップしてください')};map.on('click',e=>{chosen=[e.latlng.lat,e.latlng.lng];if(pickStart){$('lat').value=chosen[0].toFixed(6);$('lon').value=chosen[1].toFixed(6);setStart();pickStart=false;status('📍 出発地点を設定しました。経路検索を押してください')}else status('📍 報告地点を選択しました。ポイント登録を押してください')});$('addBtn').onclick=()=>{let p;try{p=$('pointMode').value==='start'?start():chosen;if(!p){status('⚠ 先に地図をタップして報告地点を選択してください');return}revision++;reports.push({p,kind:$('kind').value,memo:$('memo').value.trim().slice(0,150),at:new Date().toLocaleString('ja-JP')});save();drawReports();clearDiagnostics();if(routeLine){map.removeLayer(routeLine);routeLine=null;status('⚠ 新しい現場情報が登録されました。旧ルートは無効です。再検索してください')}else status('🟣 当日のポイント情報を登録しました（この端末内のみ）')}catch(e){status('⚠ '+e.message)}};$('clearBtn').onclick=()=>{if(!confirm('当日登録した情報を全て削除しますか？'))return;revision++;reports=[];save();drawReports();clearDiagnostics();if(routeLine){map.removeLayer(routeLine);routeLine=null}status('当日情報を削除しました。経路は再検索してください')};draw();setStart();
+
+// Road graph research module. Synthetic graph only; no live-road applicability.
+function graphShortestPath(nodes,edges,origin,destination,blockedIds=new Set()){
+  const dist=new Map(nodes.map(n=>[n,Infinity])), prev=new Map(), used=new Set();
+  if(!dist.has(origin)||!dist.has(destination))return null;
+  dist.set(origin,0);
+  while(used.size<nodes.length){
+    let u=null,best=Infinity;
+    for(const n of nodes)if(!used.has(n)&&dist.get(n)<best){u=n;best=dist.get(n)}
+    if(u===null)break;
+    if(u===destination)break;
+    used.add(u);
+    for(const e of edges){
+      if(blockedIds.has(e.id)||!Number.isFinite(e.meters)||e.meters<0||e.carAllowed===false)continue;
+      let v=null;
+      if(e.from===u)v=e.to;
+      else if(!e.oneWay&&e.to===u)v=e.from;
+      if(v===null||used.has(v))continue;
+      const next=best+e.meters;
+      if(next<dist.get(v)){dist.set(v,next);prev.set(v,{node:u,edge:e.id})}
+    }
+  }
+  if(!Number.isFinite(dist.get(destination)))return null;
+  const route=[],edgeIds=[];let cursor=destination;
+  while(cursor!==origin){route.push(cursor);const p=prev.get(cursor);if(!p)return null;edgeIds.push(p.edge);cursor=p.node}
+  route.push(origin);return {meters:dist.get(destination),nodes:route.reverse(),edges:edgeIds.reverse()};
+}
+function runGraphTests(){
+ const n=['出発','危険入口','危険出口','迂回A','迂回B','消防署'];
+ const e=[{id:'s',from:'出発',to:'危険入口',meters:100},{id:'danger',from:'危険入口',to:'危険出口',meters:100},{id:'goal',from:'危険出口',to:'消防署',meters:100},{id:'detour1',from:'出発',to:'迂回A',meters:150},{id:'detour2',from:'迂回A',to:'迂回B',meters:150},{id:'detour3',from:'迂回B',to:'消防署',meters:150}];
+ const base=graphShortestPath(n,e,'出発','消防署');
+ const avoid=graphShortestPath(n,e,'出発','消防署',new Set(['danger']));
+ const none=graphShortestPath(n,e,'出発','消防署',new Set(['danger','detour2']));
+ const oneWay=graphShortestPath(['A','B'],[{id:'ab',from:'A',to:'B',meters:10,oneWay:true}],'B','A');
+ const car=graphShortestPath(['A','B'],[{id:'walk',from:'A',to:'B',meters:10,carAllowed:false}],'A','B');
+ const tests=[['通常は300m',base?.meters===300],['危険道路を除外すると450m',avoid?.meters===450],['危険道路を通過しない',!avoid?.edges.includes('danger')],['代替路も遮断すると経路なし',none===null],['一方通行の逆走を禁止',oneWay===null],['車両不可道路を禁止',car===null]];
+ return tests.map(([name,ok])=>(ok?'✅ ':'❌ ')+name).join('\n')+'\n\n通常: '+JSON.stringify(base)+'\n除外後: '+JSON.stringify(avoid)+'\n※架空道路での計算。実道路への接続なし。';
+}
+$('graphTestBtn').onclick=()=>$('graphTestResult').textContent=runGraphTests();
+
+// Real OSM road geometry inspection only. NOT a routing or closure decision.
+let osmInspectionLayers=[];
+function inspectDistance(coords,h){let best=Infinity;for(let i=1;i<coords.length;i++)best=Math.min(best,segdist(coords[i-1],coords[i],h.a,h.b));return best}
+async function inspectOSMRoads(){
+ const btn=$('osmInspectBtn'),label=$('osmInspectStatus'),list=$('osmInspectList');
+ btn.disabled=true;btn.textContent='通信中…';label.textContent='⏳ ボタン操作を受け付けました。道路データを取得中です…';list.textContent='最大約25秒待ってください。';
+ const h=hazards[6],lat=Math.min(h.a[0],h.b[0])-.004,lat2=Math.max(h.a[0],h.b[0])+.004,lon=Math.min(h.a[1],h.b[1])-.005,lon2=Math.max(h.a[1],h.b[1])+.005;
+ const q='[out:json][timeout:20];way["highway"]('+[lat,lon,lat2,lon2].join(',')+');out geom;';
+ let data=null,lastError='';
+ try{
+  for(const endpoint of ['https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter']){
+   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),11000);
+   label.textContent='⏳ 道路データを取得中：'+new URL(endpoint).hostname;
+   try{
+    const response=await fetch(endpoint+'?data='+encodeURIComponent(q),{method:'GET',signal:ctrl.signal});
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const result=await response.json();
+    if(!Array.isArray(result.elements))throw Error('道路データの形式が不正');
+    data=result;break;
+   }catch(e){lastError=e.name==='AbortError'?'応答が時間内にありません':e.message;}
+   finally{clearTimeout(timer)}
+  }
+  if(!data)throw Error('道路データを取得できませんでした（'+lastError+'）。インターネット接続・通信制限を確認してください');
+  const exclude=new Set(['footway','cycleway','path','steps','pedestrian','bridleway','corridor','proposed','construction']);
+  const roads=data.elements.filter(w=>w.type==='way'&&w.geometry?.length>1&&!exclude.has(w.tags?.highway)).map(w=>({id:w.id,tags:w.tags||{},coords:w.geometry.map(v=>[v.lat,v.lon])}));
+  const near=roads.map(w=>({...w,d:inspectDistance(w.coords,h)})).filter(w=>w.d<30).sort((a,b)=>a.d-b.d);
+  osmInspectionLayers.forEach(layer=>map.removeLayer(layer));osmInspectionLayers=[];
+  near.forEach(w=>{const line=L.polyline(w.coords,{color:'#a04bfa',weight:5,opacity:.9}).addTo(map);line.bindPopup('OSM道路候補 #'+w.id+' / '+(w.tags.name||'名称なし')+' / '+w.tags.highway+' / 危険区間まで約'+w.d.toFixed(1)+'m（通行止め未確認）');osmInspectionLayers.push(line)});
+  map.fitBounds(L.latLngBounds([h.a,h.b]).pad(.9),{maxZoom:16});
+  label.textContent='道路 '+roads.length+'本を取得／危険区間⑦から30m未満の候補 '+near.length+'本（通行止め確定ではありません）';
+  list.textContent=near.length?near.slice(0,35).map(w=>'・OSM way '+w.id+' / '+(w.tags.name||'名称なし')+' / '+w.tags.highway+' / '+w.d.toFixed(1)+'m / 一方通行 '+(w.tags.oneway||'不明')+' / 自動車 '+(w.tags.motor_vehicle||w.tags.motorcar||'未記載')).join('\n'):'候補なし。道路データ不足や危険区間座標のずれの可能性があります。';
+ }catch(e){label.textContent='⚠ '+e.message;list.textContent='読み込みに失敗しました。これは端末の故障を意味しません。';}
+ finally{btn.disabled=false;btn.textContent='危険区間⑦付近の道路を再読み込み'}
+}
+$('osmInspectBtn').addEventListener('click',()=>{inspectOSMRoads().catch(e=>{$('osmInspectStatus').textContent='⚠ 操作エラー：'+e.message;$('osmInspectBtn').disabled=false})});
+
+// Ver.1.8: Independent offline regression checks. No GPS, map tiles, or network needed.
+function offlineTests(){
+ const cases=[
+  {name:'危険区間⑦と同一線形',line:[hazards[6].a,hazards[6].b],want:true},
+  {name:'危険区間⑦から遠い線形',line:[[35.30,137.18],[35.301,137.181]],want:false},
+  {name:'危険区間⑦を横断',line:[[35.307,137.148],[35.310,137.150]],want:true},
+  {name:'注意区間⑥は通行止め扱いしない',line:[hazards[5].a,hazards[5].b],want:false,onlyHard:true}
+ ];
+ let passed=0;const rows=[];
+ for(const c of cases){const near=(c.onlyHard?activeHazards():[hazards[6]]).some(h=>inspectDistance(c.line,h)<30);const ok=near===c.want;passed+=ok?1:0;rows.push((ok?'✅':'❌')+' '+c.name+'：'+(near?'30m未満':'30m以上'));}
+ rows.unshift('検証 '+passed+'/'+cases.length+'件合格');
+ rows.push('※ 位置座標は試験用。実道路・実災害の安全確認ではありません。');
+ return rows.join('\n');
+}
+$('offlineTestBtn').addEventListener('click',()=>{$('offlineTestResult').textContent=offlineTests()});
+$('roadJsonBtn').addEventListener('click',async()=>{
+ const out=$('roadJsonResult'),file=$('roadJsonInput').files?.[0];
+ out.textContent='読み込み開始…';
+ if(!file){out.textContent='⚠ 先にJSONファイルを選択してください。';return}
+ if(file.size>12*1024*1024){out.textContent='⚠ ファイルが大きすぎます（上限12MB）。';return}
+ try{
+  const raw=JSON.parse(await file.text());if(!Array.isArray(raw.elements))throw Error('elements配列がありません');
+  const blocked=hazards.filter(h=>h.kind==='closed');
+  const ignore=new Set(['footway','cycleway','path','steps','pedestrian','bridleway','corridor','proposed','construction']);
+  const roads=raw.elements.filter(w=>w.type==='way'&&w.tags?.highway&&!ignore.has(w.tags.highway)&&Array.isArray(w.geometry)&&w.geometry.length>=2).map(w=>({id:w.id,name:w.tags.name||'名称なし',kind:w.tags.highway,coords:w.geometry.map(g=>[Number(g.lat),Number(g.lon)])})).filter(w=>w.coords.every(p=>p.every(Number.isFinite)));
+  const results=blocked.map(h=>({h,near:roads.map(w=>({w,d:inspectDistance(w.coords,h)})).filter(x=>x.d<30).sort((a,b)=>a.d-b.d)}));
+  out.textContent='読込道路 '+roads.length+'本\n'+results.map(x=>'危険区間'+x.h.id+'：候補 '+x.near.length+'本\n'+x.near.slice(0,8).map(z=>'  way '+z.w.id+' / '+z.w.name+' / '+z.d.toFixed(1)+'m').join('\n')).join('\n')+'\n\n※ 候補は位置が近い道路。実際の通行止めとは限りません。';
+ }catch(e){out.textContent='⚠ 読み込み失敗：'+e.message}
+});
+</script><script>
+// Ver.1.8: independent OSM graph calculation; does not claim real-world safety.
+(()=>{
+ const $=id=>document.getElementById(id), out=$('realGraphResult');
+ $('hostingStatus').textContent=location.protocol==='https:'?'🌐 HTTPS公開モード：外部通信は接続先の状態にも依存します。':'📁 ローカルファイルモード：外部通信が制限される場合があります。HTTPS公開を推奨します。';
+ let graph=null,graphLayer=null,raw=null;
+ const R=Math.PI/180;
+ function meters(a,b){const dlat=(b[0]-a[0])*R,dlon=(b[1]-a[1])*R;const q=Math.sin(dlat/2)**2+Math.cos(a[0]*R)*Math.cos(b[0]*R)*Math.sin(dlon/2)**2;return 12742000*Math.asin(Math.min(1,Math.sqrt(q)))}
+ function parse(obj){
+  if(!Array.isArray(obj.elements))throw Error('Overpass JSONのelements配列がありません');
+  const nodes=new Map(),adj=new Map(),edges=[];let skipped=0,restricted=0,oneways=0;const reasons=new Map();const inc=k=>reasons.set(k,(reasons.get(k)||0)+1);
+  const allowed=new Set(['residential','unclassified','tertiary','tertiary_link','secondary','secondary_link','primary','primary_link','trunk','trunk_link','motorway','motorway_link','living_street','service']);const forbidden=new Set(['footway','path','steps','cycleway','pedestrian','bridleway','construction','proposed','corridor','platform','raceway']);
+  const add=(a,b,e)=>{if(!adj.has(a))adj.set(a,[]);adj.get(a).push({to:b,e})};
+  for(const w of obj.elements){
+   if(w.type!=='way'||!w.tags?.highway)continue;
+   const t=w.tags,h=t.highway;
+   if(!allowed.has(h)||forbidden.has(h)||['motorway','motorway_link','trunk','trunk_link'].includes(h)&&t.motor_vehicle==='no') {restricted++;inc('歩行者専用等');continue}
+   if(['no','private','agricultural','forestry'].includes(t.access)||['no','private','agricultural','forestry'].includes(t.vehicle)||['no','private','agricultural','forestry'].includes(t.motor_vehicle)||['no','private','agricultural','forestry'].includes(t.motorcar)||t.highway==='service'&&['parking_aisle','driveway','private'].includes(t.service)){restricted++;inc('車両進入制限');continue}
+   if(['busway','bus_guideway','escape','track'].includes(h)||t.highway==='living_street'&&t.motor_vehicle==='no'){restricted++;inc('車種不適合');continue}
+   if(!Array.isArray(w.geometry)||!Array.isArray(w.nodes)||w.geometry.length!==w.nodes.length){skipped++;continue}
+   const reverse=t.oneway==='-1',forward=t.oneway==='yes'||t.oneway==='1'||t.junction==='roundabout'||t.highway==='motorway';
+   if(reverse||forward)oneways++;
+   for(let i=1;i<w.nodes.length;i++){
+    const a=String(w.nodes[i-1]),b=String(w.nodes[i]),p=[+w.geometry[i-1].lat,+w.geometry[i-1].lon],q=[+w.geometry[i].lat,+w.geometry[i].lon];
+    if(!p.every(Number.isFinite)||!q.every(Number.isFinite)||meters(p,q)>1500)continue;
+    nodes.set(a,p);nodes.set(b,q);
+    const d=meters(p,q), blocked=activeHazards().some(h=>segdist(p,q,h.a,h.b)<30);
+    const e={a,b,p,q,d,blocked,way:w.id,tag:w.tags.highway,hazards:activeHazards().filter(h=>segdist(p,q,h.a,h.b)<30).map(h=>h.id)};edges.push(e);
+    if(!reverse)add(a,b,e);if(!forward)add(b,a,e);
+   }
+  }
+  if(!edges.length)throw Error('車両道路の線分がありません。out geom形式で取得してください');
+  return {nodes,adj,edges,skipped,restricted,oneways,reasons};
+ }
+ function snap(g,p){let best=null,d=Infinity;for(const [id,pos] of g.nodes){const x=meters(pos,p);if(x<d){best=id;d=x}}return {id:best,d}}
+ function path(g,startId,endId){const dist=new Map([[startId,0]]),prev=new Map(),heap=[[0,startId]];let scanned=0;
+  const push=x=>{heap.push(x);let i=heap.length-1;while(i>0){let j=(i-1)>>1;if(heap[j][0]<=x[0])break;heap[i]=heap[j];i=j}heap[i]=x};
+  const pop=()=>{const v=heap[0],x=heap.pop();if(heap.length){let i=0;while(2*i+1<heap.length){let j=2*i+1;if(j+1<heap.length&&heap[j+1][0]<heap[j][0])j++;if(heap[j][0]>=x[0])break;heap[i]=heap[j];i=j}heap[i]=x}return v};
+  while(heap.length){const [d,u]=pop();if(d!==dist.get(u))continue;if(u===endId)break;if(++scanned>100000)throw Error('探索数が上限を超えました');for(const {to,e} of g.adj.get(u)||[]){if(e.blocked)continue;const nd=d+e.d;if(nd<(dist.get(to)??Infinity)){dist.set(to,nd);prev.set(to,u);push([nd,to])}}}
+  if(!dist.has(endId))return null;const ids=[endId];while(ids[ids.length-1]!==startId){const id=prev.get(ids[ids.length-1]);if(!id||ids.length>g.nodes.size)throw Error('経路復元エラー');ids.push(id)}ids.reverse();return {points:ids.map(id=>g.nodes.get(id)),length:dist.get(endId)};
+ }
+ function showLoaded(obj){raw=obj;graph=parse(obj);const count=graph.edges.filter(e=>e.blocked).length;const perHaz=activeHazards().map(h=>h.id+': '+graph.edges.filter(e=>e.hazards.includes(h.id)).length+'本').join(' / ');out.textContent=`道路ノード ${graph.nodes.size}個 / 道路線分 ${graph.edges.length}本\n危険区間に30m未満の線分 ${count}本を試験除外\n未対応道路 ${graph.skipped}件 / 規制等で除外 ${graph.restricted}件 / 一方通行way ${graph.oneways}件\n危険区間別：${perHaz}\n「経路計算」を押してください。\n※危険区間は過去情報であり現在の通行止めではありません。`}
+ $('loadGraphBtn').onclick=async()=>{out.textContent='ファイル読込中…';try{const f=$('graphJsonFile').files?.[0];if(!f)throw Error('先にJSONファイルを選択してください');if(f.size>25000000)throw Error('25MB以下のファイルを選択してください');showLoaded(JSON.parse(await f.text()))}catch(e){out.textContent='⚠ '+e.message}};
+ $('fetchGraphBtn').onclick=async()=>{
+  const btn=$('fetchGraphBtn');if(btn.disabled)return;btn.disabled=true;
+  const lat=Number($('lat').value),lon=Number($('lon').value);
+  const endpoints=['https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter','https://overpass-api.de/api/interpreter'];
+  let messages=[];
+  try{
+   if(!$('lat').value.trim()||!$('lon').value.trim()||!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat-35.3)>.4||Math.abs(lon-137.15)>.4)throw Error('試験対象は多治見周辺の出発地のみです');
+   const south=Math.min(lat,station[0],35.307583)-.015,north=Math.max(lat,station[0],35.308944)+.015,west=Math.min(lon,station[1],137.148194)-.015,east=Math.max(lon,station[1],137.148972)+.015;
+   const q=`[out:json][timeout:20];way["highway"](${south},${west},${north},${east});out geom;`;
+   for(let i=0;i<endpoints.length;i++){
+    out.textContent=`📡 道路データ取得中 ${i+1}/${endpoints.length}…\n${new URL(endpoints[i]).host} に接続しています。`;
+    const c=new AbortController(),timer=setTimeout(()=>c.abort(),22000);
+    try{
+     const r=await fetch(endpoints[i],{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:new URLSearchParams({data:q}),signal:c.signal});
+     if(!r.ok)throw Error('HTTP '+r.status);
+     const t=await r.text();if(t.length>25000000)throw Error('取得データが25MBを超えました');
+     const obj=JSON.parse(t);showLoaded(obj);
+     out.textContent+='\n✅ 取得先：'+new URL(endpoints[i]).host;
+     return;
+    }catch(e){messages.push(new URL(endpoints[i]).host+'：'+(e.name==='AbortError'?'通信タイムアウト':e.message));}
+    finally{clearTimeout(timer)}
+   }
+   throw Error(messages.join(' / '));
+  }catch(e){out.textContent='⚠ 道路データを取得できませんでした。\n'+e.message+'\n\nAndroidでダウンロードしたHTML（content://）を直接開く場合は通信が制限されることがあります。HTTPS公開版を使用するか、道路JSONファイルを読み込んでください。';}
+  finally{btn.disabled=false}
+ };
+ $('calculateGraphBtn').onclick=()=>{if(graphLayer){map.removeLayer(graphLayer);graphLayer=null}out.textContent='道路グラフを計算中…';try{if(!raw)throw Error('道路データを先に読み込んでください');graph=parse(raw);const s=start(),a=snap(graph,s),b=snap(graph,station);if(a.d>30||b.d>30)throw Error(`接続未確認：出発点から最寄り道路ノードまで${Math.round(a.d)}m、消防署から${Math.round(b.d)}m。30mを超えるため経路を表示しません。道路への接続路自体は30m以内でも未検証です。`);const connectors=[[s,graph.nodes.get(a.id)],[graph.nodes.get(b.id),station]];for(const [u,v] of connectors){for(const h of activeHazards()){if(segdist(u,v,h.a,h.b)<30)throw Error(`接続線が危険区間${h.id}の30m以内に入るため経路を表示しません。`);}}if(a.id===b.id)throw Error("出発地点と目的地が同じ道路ノードに接続されました。道路データ不足の可能性があります");const res=path(graph,a.id,b.id);if(graphLayer){map.removeLayer(graphLayer);graphLayer=null}if(!res){out.textContent=`⚠ 危険線分を除外すると接続可能な経路がありません。\n道路データの不足・分断・一方通行の可能性があります。\n除外線分 ${graph.edges.filter(e=>e.blocked).length}本`;return}const bad=violations(res.points);if(bad.length)throw Error('検証で危険区間への接近を検出：'+bad.join(', '));graphLayer=L.polyline(res.points,{color:'#18b8ec',weight:7,opacity:.85}).addTo(map);map.fitBounds(graphLayer.getBounds(),{padding:[25,25]});out.textContent=`🔵 道路グラフによる試験経路：約${(res.length/1000).toFixed(3)}km\n危険線分の除外：${graph.edges.filter(e=>e.blocked).length}本\n進入規制等で除外：${graph.restricted} way / 一方通行：${graph.oneways} way\n危険区間別：${activeHazards().map(h=>h.id+"="+graph.edges.filter(e=>e.hazards.includes(h.id)).length+"本").join("、")}\n出発地点から道路ノードまで ${Math.round(a.d)}m / 消防署から ${Math.round(b.d)}m\n登録危険区間30m未満への接近：なし（読み込んだ道路データ上のみ）\n⚠ 接続点が30m以内で危険区間を横切らないことだけ確認。接続路の存在は未確認。OSMの条件付き規制・右左折制限・車幅・道路の入口接続は未対応です。最寄りノードへの接続路は未検証です。現況・道路幅・規制・災害時の安全性は確認できません。実走行には使用禁止。`;
+ }catch(e){out.textContent='⚠ '+e.message}};
+})();
+</script>
+<section style="margin:16px 24px;padding:18px;background:#143451;color:#fff;border-radius:12px"><h3>🧪 Ver.1.8 通信不要の道路探索回帰テスト</h3><p>実道路データ取得前に、危険道路除外・一方通行・到達不能を端末内で検査します。</p><button id="regressionBtn" type="button" style="padding:12px;background:#1aa3cf;color:white;border:0;border-radius:8px">自動テストを実行</button><pre id="regressionOut" style="white-space:pre-wrap"></pre></section>
+<script>
+(()=>{const btn=document.getElementById('regressionBtn'),out=document.getElementById('regressionOut');btn.onclick=()=>{const cases=[];function solve(edges,start,end){const adj=new Map();for(const [a,b,c,blocked,oneway] of edges){if(blocked)continue;if(!adj.has(a))adj.set(a,[]);adj.get(a).push([b,c]);if(!oneway){if(!adj.has(b))adj.set(b,[]);adj.get(b).push([a,c])}}const ds=new Map([[start,0]]),done=new Set();while(true){let u=null,d=Infinity;for(const [k,v] of ds)if(!done.has(k)&&v<d){u=k;d=v}if(u===null)return null;if(u===end)return d;done.add(u);for(const [v,w] of adj.get(u)||[])ds.set(v,Math.min(ds.get(v)??Infinity,d+w))}}const edges=[['A','B',100,true,false],['A','C',180,false,true],['C','B',150,false,true]];cases.push(['危険道路の除外',solve(edges,'A','B')===330]);cases.push(['一方通行逆走の防止',solve(edges,'B','A')===null]);cases.push(['代替経路なしの検出',solve([['A','B',100,true,false]],'A','B')===null]);cases.push(['通行可能道路の距離計算',solve([['A','B',100,false,false]],'A','B')===100]);out.textContent=cases.map(([name,ok])=>(ok?'✅ ':'❌ ')+name).join('\n')+'\n'+cases.filter(x=>x[1]).length+'/'+cases.length+'件合格\n※架空の道路網による独立した基礎テスト。実道路計算の保証ではありません。'};})();
+</script>
+<script>if(location.protocol==='https:'&&'serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}const notice=document.getElementById('webAppNotice');if(location.protocol==='file:'||location.protocol==='content:'){notice.textContent+=' 現在はローカルファイルで開いています。外部通信は失敗する場合があります。HTTPSで公開したURLから開いてください。';}else if(location.protocol==='https:'){notice.textContent+=' HTTPS接続で開いています。外部の道路データAPIが応答しない場合はJSON読込を利用してください。';}</script></body></html>
